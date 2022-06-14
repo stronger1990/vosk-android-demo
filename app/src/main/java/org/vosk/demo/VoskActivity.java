@@ -39,9 +39,11 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-public class VoskActivity extends Activity implements
-        RecognitionListener {
-
+/// 各个国家的语音模型可以从这里找：https://alphacephei.com/vosk/models
+/// 经测试发现中文语音识别，组词识别率高，比如"今天""天气"都能准确识别，但是长句子比如"今天的天气"无法完整识别，总会有几个字识别错误
+/// 上传到Git的token：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
+/// 作者写了封装调用Kaldi，让用户更加简单使用，并命名为vosk，提供更好用的API给我们训练或调用
+public class VoskActivity extends Activity implements RecognitionListener {
     static private final int STATE_START = 0;
     static private final int STATE_READY = 1;
     static private final int STATE_DONE = 2;
@@ -80,19 +82,22 @@ public class VoskActivity extends Activity implements
         }
     }
 
-    private void initModel() {
-        StorageService.unpack(this, "model-en-us", "model",
-                (model) -> {
-                    this.model = model;
-                    setUiState(STATE_READY);
-                },
-                (exception) -> setErrorState("Failed to unpack the model" + exception.getMessage()));
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+
+        if (speechService != null) {
+            speechService.stop();
+            speechService.shutdown();
+        }
+
+        if (speechStreamService != null) {
+            speechStreamService.stop();
+        }
     }
 
-
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode == PERMISSIONS_REQUEST_RECORD_AUDIO) {
@@ -107,17 +112,8 @@ public class VoskActivity extends Activity implements
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-
-        if (speechService != null) {
-            speechService.stop();
-            speechService.shutdown();
-        }
-
-        if (speechStreamService != null) {
-            speechStreamService.stop();
-        }
+    public void onPartialResult(String hypothesis) {
+        //resultView.append(hypothesis + "\n");
     }
 
     @Override
@@ -135,11 +131,6 @@ public class VoskActivity extends Activity implements
     }
 
     @Override
-    public void onPartialResult(String hypothesis) {
-        resultView.append(hypothesis + "\n");
-    }
-
-    @Override
     public void onError(Exception e) {
         setErrorState(e.getMessage());
     }
@@ -147,6 +138,15 @@ public class VoskActivity extends Activity implements
     @Override
     public void onTimeout() {
         setUiState(STATE_DONE);
+    }
+
+    private void initModel() {
+        StorageService.unpack(this, "vosk-model-small-cn-0.22", "model",
+                (model) -> {
+                    this.model = model;
+                    setUiState(STATE_READY);
+                },
+                (exception) -> setErrorState("Failed to unpack the model" + exception.getMessage()));
     }
 
     private void setUiState(int state) {
@@ -237,7 +237,6 @@ public class VoskActivity extends Activity implements
             }
         }
     }
-
 
     private void pause(boolean checked) {
         if (speechService != null) {
